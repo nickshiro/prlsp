@@ -127,7 +127,11 @@ echo "  gra      — code action (normal or visual mode)"
 echo "  :PrlspRefresh — re-fetch threads"
 echo ""
 
-export PYTHONPATH="$PROJECT_DIR:${PYTHONPATH:-}"
+# Build Go binary
+echo "Building Go binary..."
+(cd "$PROJECT_DIR" && go build -o "$PROJECT_DIR/prlsp_go" ./go/)
+
+export PRLSP_BIN="$PROJECT_DIR/prlsp_go"
 export PRLSP_MOCK="$PROJECT_DIR/test/fixtures/comments.json"
 
 nvim --clean -u "$PROJECT_DIR/test/init.lua" src/main.py

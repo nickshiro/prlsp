@@ -17,6 +17,7 @@
               ps.pygls
               ps.lsprotocol
             ]))
+            pkgs.go
             pkgs.neovim
             pkgs.gh
             pkgs.git

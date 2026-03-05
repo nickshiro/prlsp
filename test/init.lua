@@ -2,7 +2,8 @@
 -- Usage: nvim --clean -u test/init.lua
 
 -- Build LSP command with optional mock flag
-local cmd = { "python3", "-m", "prlsp" }
+local bin = vim.env.PRLSP_BIN or "prlsp_go"
+local cmd = { bin }
 local mock_path = vim.env.PRLSP_MOCK
 if mock_path then
   table.insert(cmd, "--mock")
