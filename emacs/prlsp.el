@@ -27,7 +27,7 @@
   :group 'tools
   :prefix "prlsp-")
 
-(defcustom prlsp-command '("/home/maxi/prlsp")
+(defcustom prlsp-command '("prlsp_go")
   "Command used to start the PRLSP server."
   :type '(repeat string)
   :group 'prlsp)
@@ -170,21 +170,36 @@ Intentionally empty by default; users should define their own bindings.")
                              :textDocument/codeAction params))
     (_ (error "No LSP backend active"))))
 
+(defun prlsp--diag-covers-line-p (diag line0)
+  "Return non-nil if DIAG range covers LINE0 (0-indexed)."
+  (let* ((range (prlsp--obj-get diag :range))
+         (start (prlsp--obj-get range :start))
+         (end (prlsp--obj-get range :end))
+         (start-line (prlsp--obj-get start :line))
+         (end-line (or (prlsp--obj-get end :line) start-line)))
+    (and (integerp start-line)
+         (integerp end-line)
+         (<= start-line line0)
+         (<= line0 end-line))))
+
 (defun prlsp--diagnostic-message-at-line (line)
   "Return PRLSP diagnostic message at LINE (1-indexed), or nil."
   (let ((line0 (1- line)))
     (pcase (prlsp--detect-backend)
       ('lsp
-       (when-let ((diags (gethash (lsp--buffer-uri) (lsp-diagnostics t))))
+       (let ((diags
+              (or (and (fboundp 'lsp--get-buffer-diagnostics)
+                       (lsp--get-buffer-diagnostics))
+                  (when-let ((all (and (fboundp 'lsp-diagnostics)
+                                       (lsp-diagnostics t))))
+                    (gethash (lsp--buffer-uri) all)))))
          (seq-some
           (lambda (d)
-            (let* ((range (gethash "range" d))
-                   (start (gethash "start" range))
-                   (src (gethash "source" d)))
-              (when (and (= (gethash "line" start) line0)
-                         (equal src prlsp--diagnostic-source))
-                (gethash "message" d))))
-          diags)))
+            (let ((src (prlsp--obj-get d :source)))
+              (when (and (equal src prlsp--diagnostic-source)
+                         (prlsp--diag-covers-line-p d line0))
+                (prlsp--obj-get d :message))))
+          (append diags nil))))
       ('eglot
        (seq-some
         (lambda (d)
