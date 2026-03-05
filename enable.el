@@ -2,9 +2,22 @@
 ;; Emacs integration for the prlsp server.
 
 (require 'subr-x)
+(require 'seq)
 
 (defvar prlsp-comment-buffer-name "*prlsp-comment*"
   "Name of the popup buffer used to draft PR comments.")
+
+(defvar prlsp-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c p c") #'prlsp-comment-on-line)
+    (define-key map (kbd "C-c p r") #'prlsp-reply-on-line)
+    map)
+  "Keymap for `prlsp-mode'.")
+
+(define-minor-mode prlsp-mode
+  "Minor mode with PRLSP-specific UX commands."
+  :lighter " PRLSP"
+  :keymap prlsp-mode-map)
 
 (defvar-local prlsp-comment-origin-buffer nil)
 (defvar-local prlsp-comment-origin-uri nil)
@@ -42,6 +55,21 @@
    ((vectorp args) (and (< n (length args)) (aref args n)))
    ((listp args) (nth n args))
    (t nil)))
+
+(defun prlsp--active-p ()
+  "Return non-nil when the current buffer is managed by prlsp."
+  (and (bound-and-true-p lsp-mode)
+       (seq-some
+        (lambda (ws)
+          (eq (lsp--client-server-id (lsp--workspace-client ws)) 'prlsp))
+        (or (and (boundp 'lsp--buffer-workspaces) lsp--buffer-workspaces)
+            (and (fboundp 'lsp-workspaces) (lsp-workspaces))))))
+
+(defun prlsp--maybe-enable-mode ()
+  "Enable `prlsp-mode' only in buffers connected to prlsp."
+  (if (prlsp--active-p)
+      (prlsp-mode 1)
+    (prlsp-mode -1)))
 
 (defun prlsp-comment--body ()
   "Return trimmed comment body from current popup buffer."
@@ -192,12 +220,19 @@
    (make-lsp-client
     :new-connection (lsp-stdio-connection
                      '("python3" "-m" "prlsp"))
-    :major-modes '(prog-mode markdown-mode gfm-mode)
+    :major-modes '(prog-mode markdown-mode gfm-mode zig-mode)
     :server-id 'prlsp))
 
   (add-hook 'prog-mode-hook #'lsp-deferred)
   (add-hook 'gfm-mode-hook #'lsp-deferred)
-  (define-key prog-mode-map (kbd "C-c p c") #'prlsp-comment-on-line)
-  (define-key prog-mode-map (kbd "C-c p r") #'prlsp-reply-on-line))
+  (add-hook 'lsp-managed-mode-hook #'prlsp--maybe-enable-mode)
+  (add-hook 'after-change-major-mode-hook #'prlsp--maybe-enable-mode))
 
 
+
+(after! lsp-mode
+  (map! :map prlsp-mode-map
+        :localleader
+        (:prefix ("p" . "prlsp")
+         :desc "New PR comment" "c" #'prlsp-comment-on-line
+         :desc "Reply to thread" "r" #'prlsp-reply-on-line)))
