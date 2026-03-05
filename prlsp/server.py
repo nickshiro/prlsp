@@ -134,6 +134,22 @@ def create_server(github=None) -> PRReviewServer:
                 ),
             ))
 
+            # Open in browser action
+            comment_id = data.get("comment_id", 0) if isinstance(data, dict) else 0
+            if comment_id and server.git_info and server.pr_number:
+                info = server.git_info
+                gh_url = f"https://github.com/{info.owner}/{info.repo}/pull/{server.pr_number}#discussion_r{comment_id}"
+                actions.append(lsp.CodeAction(
+                    title="Open thread in browser",
+                    kind=lsp.CodeActionKind.Empty,
+                    diagnostics=[diag],
+                    command=lsp.Command(
+                        title="Open thread in browser",
+                        command="prlsp.openInBrowser",
+                        arguments=[gh_url],
+                    ),
+                ))
+
         # Reply actions — extract selected text, offer for ALL unresolved threads in file
         selected = _extract_selection(server, uri, params.range)
         if selected:
@@ -171,6 +187,10 @@ def create_server(github=None) -> PRReviewServer:
         else:
             server.window_show_message(lsp.ShowMessageParams(
                 type=lsp.MessageType.Error, message="Failed to resolve thread"))
+
+    @server.command("prlsp.openInBrowser")
+    def cmd_open_in_browser(url: str):
+        server.window_show_document(lsp.ShowDocumentParams(uri=url, external=True))
 
     @server.command("prlsp.reply")
     def cmd_reply(comment_id: int, uri: str, body: str):
